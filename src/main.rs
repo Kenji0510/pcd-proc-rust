@@ -60,9 +60,9 @@ fn load_pcd(path: &str) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pcd_path01 =
-        "/home/kenji/workspace/Rust/pcd-sample/data/Laser_map/voxelization/Laser_map_45.pcd";
+        "/Users/kenji/workspace/Rust/rerun-sample/data/Laser_map/voxelization/Laser_map_45.pcd";
 
-    let pcd_path02 = "/home/kenji/workspace/Rust/pcd-sample/data/cr/voxelization/cr_45.pcd";
+    let pcd_path02 = "/Users/kenji/workspace/Rust/rerun-sample/data/cr/voxelization/cr_45.pcd";
 
     let points_01 = match load_pcd(pcd_path01) {
         Ok(points) => points,
