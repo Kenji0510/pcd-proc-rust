@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-pcd-rs = { version = "0.12.0" }
+pcd-rs = { version = "0.12.0",features = ["derive"] }
+rand = "0.9.0"
 rerun = "0.22.1"
