@@ -1,5 +1,7 @@
 use core::f32;
+use std::{fs, path::Path, thread::sleep, time::Duration};
 
+use anyhow::Result;
 use pcd_rs::{PcdDeserialize, Reader};
 use rerun::{Color, Points3D, RecordingStreamBuilder};
 
@@ -53,82 +55,132 @@ fn load_pcd(path: &str) -> Result<Vec<Point>, Box<dyn std::error::Error>> {
             return Err(e.into());
         }
     };
-    println!("There are {} points", points.len());
+    // println!("There are {} points", points.len());
 
     Ok(points)
 }
 
+fn load_pcd_paths(dir_path: &str, data_type: &str) -> Result<Vec<String>, anyhow::Error> {
+    let mut paths: Vec<String> = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(dir_path) {
+        println!("Reading directory: {}", dir_path);
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                // println!("Data: {}", path.to_str().unwrap());
+
+                if let Some(ext) = path.extension() {
+                    if ext == "pcd" {
+                        if let Some(path_str) = path.to_str() {
+                            paths.push(path_str.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        eprintln!("Error reading directory: {}", dir_path);
+        return Err(anyhow::anyhow!("Failed to read directory").into());
+    }
+
+    paths.sort_by_key(|path| {
+        let filename = Path::new(path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+        filename
+            .strip_prefix(&format!("{}_", data_type))
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0)
+    });
+    // println!("Sorted paths: {:?}", paths);
+
+    Ok(paths)
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let pcd_path01 =
-        "/Users/kenji/workspace/Rust/rerun-sample/data/Laser_map/voxelization/Laser_map_45.pcd";
+    let cr_paths = match load_pcd_paths(
+        "/Users/kenji/workspace/Rust/rerun-sample/data/cr/voxelization",
+        "cr",
+    ) {
+        Ok(paths) => paths,
+        Err(e) => {
+            eprintln!("Error loading paths: {}", e);
+            return Err(e.into());
+        }
+    };
 
-    let pcd_path02 = "/Users/kenji/workspace/Rust/rerun-sample/data/cr/voxelization/cr_45.pcd";
+    // let laser_map_paths = match load_pcd_paths(
+    //     "/Users/kenji/workspace/Rust/rerun-sample/data/Laser_map/voxelization",
+    //     "Laser_map",
+    // ) {
+    //     Ok(paths) => paths,
+    //     Err(e) => {
+    //         eprintln!("Error loading paths: {}", e);
+    //         return Err(e.into());
+    //     }
+    // };
 
-    let points_01 = match load_pcd(pcd_path01) {
-        Ok(points) => points,
+    let mut cr_points: Vec<Points3D> = Vec::new();
+    let mut laser_map_points: Vec<Points3D> = Vec::new();
+
+    /*  Transform .pcd to Points3D */
+    // For cloud_registered
+    for path in cr_paths.iter() {
+        let points_vec = match load_pcd(path) {
+            Ok(points) => points,
+            Err(e) => {
+                eprintln!("Error loading PCD file: {}", e);
+                return Err(e.into());
+            }
+        };
+
+        let points_tuple: Vec<(f32, f32, f32)> =
+            points_vec.iter().map(|pt| (pt.x, pt.y, pt.z)).collect();
+
+        cr_points.push(Points3D::new(points_tuple.into_iter()));
+    }
+
+    // For Laser_map
+    match load_pcd(
+        "/Users/kenji/workspace/Rust/rerun-sample/data/Laser_map/voxelization/Laser_map_110.pcd",
+    ) {
+        Ok(points_vec) => {
+            let points_tuple: Vec<(f32, f32, f32)> =
+                points_vec.iter().map(|pt| (pt.x, pt.y, pt.z)).collect();
+
+            laser_map_points.push(Points3D::new(points_tuple.into_iter()));
+        }
         Err(e) => {
             eprintln!("Error loading PCD file: {}", e);
             return Err(e.into());
         }
     };
-
-    let points_02 = match load_pcd(pcd_path02) {
-        Ok(points) => points,
-        Err(e) => {
-            eprintln!("Error loading PCD file: {}", e);
-            return Err(e.into());
-        }
-    };
-
-    let point_cloud01: Vec<(f32, f32, f32)> =
-        points_01.iter().map(|pt| (pt.x, pt.y, pt.z)).collect();
-
-    let point_cloud02: Vec<(f32, f32, f32)> =
-        points_02.iter().map(|pt| (pt.x, pt.y, pt.z)).collect();
-
-    let min_z = points_01
-        .iter()
-        .map(|pt| pt.z)
-        .fold(f32::INFINITY, f32::min);
-    let max_z = points_01
-        .iter()
-        .map(|pt| pt.z)
-        .fold(f32::NEG_INFINITY, f32::max);
-
-    let point_cloud_color: Vec<[u8; 3]> = points_01
-        .iter()
-        .map(|pt| {
-            // z座標を [0, 1] に正規化。minとmaxが同じ場合は0.0とする
-            let t = if max_z - min_z == 0.0 {
-                0.0
-            } else {
-                (pt.z - min_z) / (max_z - min_z)
-            };
-            // 正規化値 t をもとに、Hue を 0〜360 度に割り当てる
-            let hue = t * 360.0;
-            // 彩度と明度は 1.0 固定で鮮やかな色を得る
-            hsv_to_rgb(hue, 0.9, 1.0)
-        })
-        .collect();
-
-    let positions01 = Points3D::new(point_cloud01.into_iter());
-    let positions02 = Points3D::new(point_cloud02.into_iter());
 
     let rec = RecordingStreamBuilder::new("rerun_example_pcd").spawn()?;
 
+    println!("Sending points to Rerun...");
     rec.log(
-        "pcd",
-        &positions01.with_colors(
-            point_cloud_color
-                .into_iter()
-                .map(|color| Color::from_rgb(color[0], color[1], color[2])),
-        ),
+        "Laser_map",
+        &laser_map_points[0]
+            .clone()
+            .with_colors([Color::from_rgb(0, 255, 0)])
+            .with_radii([0.005]),
     )?;
 
-    rec.log(
-        "pcd02",
-        &positions02.with_colors([Color::from_rgb(255, 0, 0)]),
-    )?;
+    for cr_point in cr_points.iter() {
+        rec.log(
+            "cloud_registered",
+            &cr_point
+                .clone()
+                .with_colors([Color::from_rgb(255, 0, 255)])
+                .with_radii([0.03]),
+        )?;
+
+        sleep(Duration::from_millis(300));
+    }
+    println!("Finished to send points to Rerun...");
 
     Ok(())
 }
