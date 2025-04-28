@@ -102,8 +102,10 @@ fn load_pcd_paths(dir_path: &str, data_type: &str) -> Result<Vec<String>, anyhow
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cr_paths = match load_pcd_paths(
         // "/Users/kenji/workspace/Rust/rerun-sample/data/cr/voxelization",
-        "/Users/kenji/workspace/Rust/rerun-sample/data/adjusted_data/cr/",
-        "cr",
+        // "/Users/kenji/workspace/Rust/rerun-sample/data/adjusted_data/cr/",
+        "/Users/kenji/workspace/Rust/rerun-sample/data/adjusted_data/avia/",
+        // "cr",
+        "avia",
     ) {
         Ok(paths) => paths,
         Err(e) => {
